@@ -1,0 +1,505 @@
+from lxml import etree
+import csv
+import re
+import pandas as pd
+
+# Define functions to extract creator and contributor parts
+def extract_famname(name):
+    if name:
+        name_parts = name.split(',')
+        return name_parts[0].strip() if name_parts else ""
+    return ""
+
+import re
+
+def extract_givname(name):
+    if name:
+        name_parts = name.split(',')
+        if len(name_parts) > 1:
+            name_str = name_parts[1].strip()
+            # Use a regular expression to capture the first word as GIVNAME
+            givname_match = re.match(r'(\w+)', name_str)
+            if givname_match:
+                return givname_match.group(1)
+    return ""
+
+def extract_midname(name):
+    if name:
+        name_parts = name.split(',')
+        if len(name_parts) > 1:
+            first_and_middle = name_parts[1].strip()
+            if first_and_middle:
+                # Split the first and middle names by spaces
+                names = first_and_middle.split()
+                if len(names) > 1:
+                    # Extract the last word as the middle initial
+                    return names[-1].strip()
+    return ""
+
+def determine_restype(row):
+    projtype = row['ASSET_PROJTYPE']
+    dgrname = row['ASSET_DGRNAME']
+
+    if projtype == 'thesis':
+        if dgrname == 'MFA':
+            return 'etd.graduate'
+        elif dgrname == 'MA':
+            return 'etd.graduate'
+        elif dgrname == 'MM':
+            return 'etd.graduate'
+        elif dgrname == 'MSc':
+            return 'etd.graduate'
+        elif dgrname == 'DMA':
+            return 'etd.doctoral'
+        elif dgrname == 'DA':
+            return 'etd.doctoral'
+    
+    # Default value if no criteria match
+    return 'other.other'
+
+# Open the MARC XML file for parsing
+tree = etree.parse('input.xml')
+root = tree.getroot()
+
+# Define all possible headers
+all_headers = [
+    '', 'group_id', 'ASSET_TITLE', 'ASSET_SUBTITLE', 'ASSET_DOI', 'ASSET_PMID', 'ASSET_ISBN', 'ASSET_EISBN', 'ASSET_PMCID', 'ASSET_GOVTNUM', 'ASSET_PUBLISHER', 'ASSET_PUBLICATIONPLACE', 'ASSET_PUBLISHDATE', 'ASSET_AVAILDATE', 'ASSET_ACCEPTDATE', 'ASSET_COPYRIGHTDATE', 'ASSET_CREATEDATE', 'ASSET_OPENINGDATE', 'ASSET_PERFORMANCEDATE', 'ASSET_RESTYPE', 'ASSET_RESSUBTYPE', 'ASSET_KEYWORDS', 'ASSET_PEEREVIEW', 'ASSET_LANG', 'ASSET_ABSTRACT', 'ASSET_COPYRIGHT', 'ASSET_LICENSECODE', 'ASSET_ACCESSRIGHT', 'ASSET_ACCESSRIGHTDATE', 'ASSET_AFFILIATION', 'ASSET_GRANTNOTE', 'ASSET_ORIGASSET_ID', 'ASSET_SUBMITDATE', 'ASSET_ORIG_REPOSITORYNAME', 'ASSET_PAGES', 'ASSET_SIZE', 'ASSET_EXTENT', 'ASSET_FORMAT', 'ASSET_EDITION', 'ASSET_SUBJECT', 'ASSET_OPENACCESS', 'ASSET_PRVNCE', 'ASSET_ALTTITLE', 'ASSET_TRANSLATTI', 'ASSET_OTHERTIT', 'ASSET_SERIES', 'ASSET_VOLNUM', 'ASSET_IDURI', 'ASSET_HANDLE', 'ASSET_IDOTHER', 'ASSET_IDPQDT', 'ASSET_ARXIV', 'ASSET_DATESUB', 'ASSET_DATEUPD', 'ASSET_DATEVALID', 'ASSET_DATEEPUB', 'ASSET_DATEPOSTED', 'ASSET_DATEOTHER', 'ASSET_DATEAPP', 'ASSET_DATECOMPL', 'ASSET_DATEDEGREE', 'ASSET_DATEDEF', 'ASSET_DATEPRESNT', 'ASSET_CONFNAME', 'ASSET_CONFNUM', 'ASSET_CONFLOC', 'ASSET_CONFDAT', 'ASSET_EVNTNAM', 'ASSET_EVNTLOC', 'ASSET_EVNTDAT', 'ASSET_EVNTTYP', 'ASSET_EVNTNUM', 'ASSET_DGRGRANT', 'ASSET_DGRLEVEL', 'ASSET_DGRNAME', 'ASSET_PRIMARYSUBJ', 'ASSET_SECONDARYSUBJ', 'ASSET_PAGESUNPAGINATED', 'ASSET_APPLICATIONDATE', 'ASSET_RENEWEDDATE', 'ASSET_PATENT_STATUS', 'ASSET_PATENT_NUMBER', 'ASSET_PATENT_ABBREVNUM', 'ASSET_PATENT_KINDCODE', 'ASSET_PATENT_APPLICATIONNUM', 'ASSET_PATENT_APPLICATIONCODE', 'ASSET_PATENT_AGENCY', 'ASSET_WOS', 'ASSET_SCOPUS', 'ASSET_ARK', 'ASSET_SICI', 'ASSET_RNO', 'ASSET_ISMN', 'ASSET_PORTAL_VISIBILITY', 'ASSET_IDENTIFIER_ADDITIONAL01', 'ASSET_PROFILE_VISIBILITY', 'ASSET_IDENTIFIER_ADDITIONAL02', 'ASSET_COMMENT', 'ASSET_IDENTIFIER_ADDITIONAL03', 'ASSET_METHODS', 'ASSET_IDENTIFIER_ADDITIONAL04', 'ASSET_SERIESINFO', 'ASSET_IDENTIFIER_ADDITIONAL05', 'ASSET_EDUCTNLEVEL', 'ASSET_IDENTIFIER_ADDITIONAL06', 'ASSET_INSTRUCTMETHOD', 'ASSET_IDENTIFIER_ADDITIONAL07', 'ASSET_TECHINFO', 'ASSET_IDENTIFIER_ADDITIONAL08', 'ASSET_SPATIALDESC', 'ASSET_IDENTIFIER_ADDITIONAL09', 'ASSET_TEMPORALDESC', 'ASSET_OTHERDESC', 'ASSET_BIBLIOGRAPH', 'ASSET_COVERAGE', 'ASSET_ILLUSTRATION', 'ASSET_DATECOLLECT', 'ASSET_DATEISSUE', 'ASSET_DATERENEW', 'ASSET_ANZTOA', 'ASSET_COURSENAME', 'ASSET_COURSENUMB', 'ASSET_LEARNTIME', 'ASSET_MOBILCOMPAT', 'ASSET_SRCCODEAVAIL', 'ASSET_SERIESNUMBER', 'ASSET_PUBSEASON', 'ASSET_DGRSEASON', 'ASSET_DGRPRG', 'ASSET_LOCLFLD1', 'ASSET_LOCLFLD2', 'ASSET_LOCLFLD3', 'ASSET_LOCLFLD4', 'ASSET_LOCLFLD5', 'ASSET_LOCLFLD6', 'ASSET_LOCLFLD7', 'ASSET_LOCLFLD8', 'ASSET_LOCLFLD9', 'ASSET_LOCLFLD10', 'ASSET_LOCLFLD11', 'ASSET_LOCLFLD12', 'ASSET_LOCLFLD13', 'ASSET_LOCLFLD14', 'ASSET_LOCLFLD15', 'ASSET_PROJTYPE', 'ASSET_AUDIENCE', 'PRTOF_EPAGE', 'PRTOF_SPAGE', 'PRTOF_ISSUE', 'PRTOF_ARTICLENUMBER', 'PRTOF_VOL', 'PRTOF_ISSN', 'PRTOF_EISSN', 'PRTOF_ISBN', 'PRTOF_EISBN', 'PRTOF_TITLE', 'PRTOF_DOI', 'PRTOF_PAGES', 'PRTOF_NLMABRV', 'CREATOR_FAMNAME', 'CREATOR_GIVNAME', 'CREATOR_MIDNAME', 'CREATOR_NAMESUF', 'CREATOR_AFFILIATION', 'CREATOR_EMAIL', 'CREATOR_RESEARCHERID', 'CREATOR_ORCID', 'CREATOR_PRIMARYID', 'CREATOR_BRCODE', 'CREATOR_ADDITIONAL', 'OCREATOR_ORGANIZATION', 'CONT_TYPE', 'CONT_CONTNAME', 'CONT_FAMNAME', 'CONT_GIVNAME', 'CONT_MIDNAME', 'CONT_NAMESUF', 'CONT_AFFILIATION', 'CONT_EMAIL', 'CONT_RESEARCHERID', 'CONT_ORCID', 'CONT_PRIMARYID', 'CONT_BRCODE', 'CONT_ADDITIONAL', 'OCONT_ORGANIZATION', 'LINK_LINKURL', 'LINK_LINKTITLE', 'LINK_LINKDESC', 'LINK_CONTENTTYPE', 'LINK_LINKLCNSE', 'LINK_LINKRIGHTS', 'LINK_LINKOWN', 'LINK_ORDER', 'LINK_DISPLAY_IN_VIEWER', 'FILE_FILEURL', 'FILE_DESCRIPTION', 'FILE_DISPLAY_NAME', 'FILE_ORDER', 'FILE_LICENSE', 'FILE_RIGHTS', 'FILE_RIGHTS_REASON', 'FILE_RIGHTS_DATE', 'FILE_CONTENTTYPE', 'FILE_SUPPLEMENTAL']
+
+# Create separate DataFrames for ASSET, CREATOR, and CONTRIBUTOR data
+asset_data_df = pd.DataFrame(columns=all_headers + ['Row_Label'])
+creator_data_df = pd.DataFrame(columns=all_headers + ['Row_Label'])
+contributor_data_df = pd.DataFrame(columns=all_headers + ['Row_Label'])
+file_data_df = pd.DataFrame(columns=all_headers + ['Row_Label'])
+final_data_df = pd.concat([asset_data_df, creator_data_df, contributor_data_df, file_data_df], ignore_index=True)
+
+
+
+# Loop through each record in the MARC XML
+for record in root.findall('.//record'):
+    # Create a dictionary to store data for this record
+    
+    # Initialize group_id for this record
+    current_group_id = None
+    
+    group_data = {}
+    
+    # Initialize an empty list to store group IDs
+    group_ids = []
+
+    # Loop through all subfield a entries within field 099
+    for field_099_subfield_a in record.findall(".//datafield[@tag='099']/subfield[@code='a']"):
+        # Use regular expression to find a 3-figure string [letter][number][number]
+        match = re.search(r'([A-Za-z]\d{2})', field_099_subfield_a.text)
+        if match:
+            # Append the matched group ID to the list
+            group_ids.append(match.group(1))
+
+    # Now, you have a list of group IDs for this record
+    # You can choose how to use or store these group IDs, such as joining them into a single string
+    current_group_id = ' '.join(group_ids)
+
+    # Extract creators and contributors
+    creators = []
+    contributors = []
+    file_display_names = []
+
+    for datafield in record.findall(".//datafield[@tag='100']"):
+        creator = datafield.find("subfield[@code='a']").text
+        creators.append(creator)
+
+    for datafield in record.findall(".//datafield[@tag='700']"):
+        contributor = datafield.find("subfield[@code='a']").text
+        contributors.append(contributor)
+    
+    for field_099_subfield_a in record.findall(".//datafield[@tag='099']/subfield[@code='a']"):
+        # Append each subfield a value to the list
+        file_display_names.append(field_099_subfield_a.text)
+
+    # Combine all the subfield a values into a single FILE_DISPLAY_NAME
+    file_display_name = ' '.join(file_display_names)
+
+
+    # Handle the ASSET fields
+    asset_data = {
+        'group_id': current_group_id if current_group_id else '',
+        '': 'ASSET',
+        'ASSET_PUBLISHDATE': record.find(".//datafield[@tag='264']/subfield[@code='c']").text,
+        'ASSET_PUBLISHER': record.find(".//datafield[@tag='264']/subfield[@code='b']").text,
+        'ASSET_PUBLICATIONPLACE': record.find(".//datafield[@tag='264']/subfield[@code='a']").text,
+        'ASSET_COPYRIGHTDATE': record.find(".//datafield[@tag='264']/subfield[@code='c']").text,
+        'ASSET_LANG': record.find(".//datafield[@tag='040']/subfield[@code='b']").text,
+        'ASSET_DGRGRANT': record.find(".//datafield[@tag='502']/subfield[@code='c']").text,
+    }
+
+    # Handle the 245 field for ASSET_TITLE
+    ASSET_TITLE = ''
+    datafield_245 = record.find(".//datafield[@tag='245']")
+    subfield_a = datafield_245.find("subfield[@code='a']")
+    subfield_b = datafield_245.find("subfield[@code='b']")
+
+    if subfield_a is not None:
+        ASSET_TITLE += subfield_a.text
+
+    if subfield_b is not None:
+        if ASSET_TITLE:
+            ASSET_TITLE += ' '
+        ASSET_TITLE += subfield_b.text
+
+    asset_data['ASSET_TITLE'] = ASSET_TITLE
+
+    # Handle the ASSET_COPYRIGHT field (datafield with tag '540' and subfield code 'a')
+    asset_copyright_element = record.find(".//datafield[@tag='540']/subfield[@code='a']")
+    if asset_copyright_element is not None:
+        ASSET_COPYRIGHT = asset_copyright_element.text
+    else:
+        ASSET_COPYRIGHT = ""
+    asset_data['ASSET_COPYRIGHT'] = ASSET_COPYRIGHT
+
+    
+    # Handle the 300 field for ASSET_EXTENT
+    ASSET_EXTENT = ''
+    datafield_300 = record.find(".//datafield[@tag='300']")
+    if datafield_300 is not None:
+        subfield_a = datafield_300.find("subfield[@code='a']")
+        subfield_c = datafield_300.find("subfield[@code='c']")
+        if subfield_a is not None:
+            ASSET_EXTENT += subfield_a.text
+        if subfield_c is not None:
+            ASSET_EXTENT += ' ' + subfield_c.text
+    asset_data['ASSET_EXTENT'] = ASSET_EXTENT
+    
+    # Handle the ASSET_COMMENT field
+    # Initialize ASSET_COMMENT as an empty string
+    ASSET_COMMENT = ""
+
+    # Handle the ASSET_COMMENT field (datafield with tag '504' and subfield code 'a')
+    comment_element = record.find(".//datafield[@tag='504']/subfield[@code='a']")
+    if comment_element is not None:
+        ASSET_COMMENT += comment_element.text
+
+    # Handle additional fields and append their text to ASSET_COMMENT
+    comment_element_1 = record.find(".//datafield[@tag='505']/subfield[@code='a']")
+    if comment_element_1 is not None:
+        ASSET_COMMENT += " " + comment_element_1.text  # Add a newline before appending
+
+    comment_element_2 = record.find(".//datafield[@tag='500']/subfield[@code='a']")
+    if comment_element_2 is not None:
+        ASSET_COMMENT += " " + comment_element_2.text
+
+    else:
+        ASSET_COMMENT = ""
+    asset_data['ASSET_COMMENT'] = ASSET_COMMENT
+
+    # Handle the 520 field with first indicator 3
+    ASSET_ABSTRACT = ""
+    datafield_520 = record.find(".//datafield[@tag='520'][@ind1='3']")
+    if datafield_520 is not None:
+        subfield_a = datafield_520.find("subfield[@code='a']")
+        if subfield_a is not None:
+            ASSET_ABSTRACT = subfield_a.text
+    asset_data['ASSET_ABSTRACT'] = ASSET_ABSTRACT
+
+    # Handle ASSET_PAGES
+    pages_field = record.find(".//datafield[@tag='300']/subfield[@code='a']").text
+    if pages_field:
+        match = re.search(r'^(.*?)\s*pages', pages_field)
+        if match:
+            ASSET_PAGES = match.group(1).strip()
+        else:
+            ASSET_PAGES = ""
+    else:
+        ASSET_PAGES = ""
+    asset_data['ASSET_PAGES'] = ASSET_PAGES
+
+    # Extract keywords
+    keyword_values = []
+    for tag in ['600', '610', '611', '630', '650']:
+        subfields = record.findall(f".//datafield[@tag='{tag}']/*")
+        keyword_values.extend([subfield.text for subfield in subfields])
+    asset_data['ASSET_KEYWORDS'] = '@@'.join(keyword_values)
+    
+    # Map ASSET_PROJTYPE based on MARC field 690 subfield 'a'
+    marc_field_690_subfield_a = record.find(".//datafield[@tag='690']/subfield[@code='a']").text.strip()
+    marc_field_655_subfield_a = record.find(".//datafield[@tag='655']/subfield[@code='a']").text.strip()
+
+    if "music theses" in marc_field_690_subfield_a.lower():
+        asset_data['ASSET_PROJTYPE'] = "thesis"
+    elif "music theses" in marc_field_655_subfield_a.lower():
+        asset_data['ASSET_PROJTYPE'] = "thesis"
+    elif "academic theses" in marc_field_690_subfield_a.lower():
+        asset_data['ASSET_PROJTYPE'] = "thesis"
+    elif "academic theses" in marc_field_655_subfield_a.lower():
+        asset_data['ASSET_PROJTYPE'] = "thesis"
+    else:
+        asset_data['ASSET_PROJTYPE'] = 'thesis'
+
+    # Handle the 502 field for ASSET_DGRNAME
+    ASSET_DGRNAME = ""
+    datafield_502 = record.find(".//datafield[@tag='502']")
+    if datafield_502 is not None:
+        subfield_b = datafield_502.find("subfield[@code='b']")
+        if subfield_b is not None:
+            text = subfield_b.text.lower()
+            if "master of music" in text or "m.m." in text:
+                ASSET_DGRNAME = "MM"
+            # Add other conditions here
+            elif "master of arts" in text or "m.a." in text:
+                ASSET_DGRNAME = "MA"
+            elif "master of fine arts" in text or "m.f.a." in text:
+                ASSET_DGRNAME = "MFA"
+            elif "master of science" in text or "m.s." in text:
+                ASSET_DGRNAME = "MSc"
+            elif "doctor of musical arts" in text or "d.m.a." in text:
+                ASSET_DGRNAME = "DMA"
+            elif "doctor of arts" in text or "d.a." in text:
+                ASSET_DGRNAME = "DA"
+            else:
+                ASSET_DGRNAME = "Other"
+
+                
+    # ASSET_AFFILIATION
+    asset_affiliation = ""
+
+    for datafield in record.findall(".//datafield[@tag='500']"):
+        subfield_a = datafield.find("subfield[@code='a']")
+
+        if subfield_a is not None:
+            extracted_text = subfield_a.text.strip()  # Remove leading/trailing whitespace
+           #print(f"Extracted Text: '{extracted_text}'")  # Print extracted text in single quotes for visibility
+
+            # Check if 'Instrumental Performance' is present in the extracted text
+            if "Instrumental Performance" in extracted_text:
+                asset_affiliation = "01UOML_INST___d7f41073765410710163e5b33eba7183"
+                break  # Exit the loop if 'Instrumental Performance' is found
+            elif "Undergraduate Studies" in extracted_text:
+                asset_affiliation = "01UOML_INST___af8f01bd4d570148781a764f57cc1ba6"
+                break
+            elif "Education and Music Therapy" in extracted_text:
+                asset_affiliation = "01UOML_INST___d7f41073765410710163dc9de4cb717b"
+                break
+            elif "Graduate Studies" in extracted_text:
+                asset_affiliation = "01UOML_INST___d7f41073765410710163e1506faf717f"
+                break
+            elif "Keyboard Performance" in extracted_text:
+                asset_affiliation = "01UOML_INST___d7f41073765410710163ea54dc2b7187"
+                break
+            elif "Music Media and Industry" in extracted_text:
+                asset_affiliation = "01UOML_INST___d7f41073765410710163f3b61b58718f"
+                break
+            elif "Musicology" in extracted_text:
+                asset_affiliation = "01UOML_INST___d7f41073765410710163f86644907193"
+                break
+            elif "Studio Music and Jazz" in extracted_text:
+                asset_affiliation = "01UOML_INST___d7f41073765410710163f86644907193"
+                break
+            elif "Theory and Composition" in extracted_text:
+                asset_affiliation = "01UOML_INST___d7f4107376541071016406c432e7719f"
+                break
+            elif "Vocal Performance" in extracted_text:
+                asset_affiliation = "01UOML_INST___d7f410737654107101640b89a74e71a3"
+                break
+            elif "Administration" in extracted_text:
+                asset_affiliation = "01UOML_INST___d7f41073765410710163c18aca897163@@01UOML_INST___d7f41073765410710163ca4b222b716b"
+                break
+            elif "Business Operations" in extracted_text:
+                asset_affiliation = "01UOML_INST___af8f01bd4d570147606fff6257cc66a7"
+                break
+            elif "Communications and Events" in extracted_text:
+                asset_affiliation = "01UOML_INST___af8f01bd4d57010fc2009f6857cce1a7"
+                break
+            elif "Concert Hall" in extracted_text:
+                asset_affiliation = "01UOML_INST___af8f01bd4d5701d3ce89e65b57ccf8a6"
+                break
+            elif "Operations" in extracted_text:
+                asset_affiliation = "01UOML_INST___af8f01bd4d570107e76f804857cc41a5"
+                break
+            elif "Preparatory Programs" in extracted_text:
+                asset_affiliation = "01UOML_INST___d7f41073765410710163fd4e87e37197"
+                break
+            elif "Development and Special Events" in extracted_text:
+                asset_affiliation = "01UOML_INST___d7f41073765410710163d8374fe57177"
+                break
+            elif "Arts Development Program" in extracted_text:
+                asset_affiliation = "01UOML_INST___d7f41073765410710163cf1c4a75716f"
+                break
+
+    # Set the default value if none of the conditions match
+    if not asset_affiliation:
+        asset_affiliation = "01UOML_INST___d7f41073765410710163c5e0990c7167@@01UOML_INST___d7f4107376541070fd0dd4b09eeb6661@@01UOML_INST___01UOML_INST"
+
+    # ASSET_DGRPRG
+    asset_program = ""
+
+    for datafield in record.findall(".//datafield[@tag='500']"):
+        subfield_a = datafield.find("subfield[@code='a']")
+
+        if subfield_a is not None:
+            extracted_text = subfield_a.text.strip()  # Remove leading/trailing whitespace
+           #print(f"Extracted Text: '{extracted_text}'")  # Print extracted text in single quotes for visibility
+
+            if "Music Choral and Voice" in extracted_text:
+                asset_program = "music_choral_and_voice"
+                break
+            elif "Music Composition" in extracted_text:
+                asset_program = "music_composition"
+                break
+            elif "Instrumental Performance" in extracted_text:
+                asset_program = "instrumental_performance"
+                break
+            elif "Music Conducting" in extracted_text:
+                asset_program = "music_conducting"
+                break
+            elif "Music Education" in extracted_text:
+                asset_program = "music_education"
+                break
+            elif "Music Education and Music Therapy" in extracted_text:
+                asset_program = "music_education_and_music_therapy"
+                break
+            elif "Music Literature" in extracted_text:
+                asset_program = "music_literature"
+                break
+            elif "Music Performance" in extracted_text:
+                asset_program = "music_performance"
+                break
+            elif "Music Studio and Jazz" in extracted_text:
+                asset_program = "music_studio_and_jazz"
+                break
+            elif "Music Theory and Composition" in extracted_text:
+                asset_program = "music_theory_and_composition"
+                break
+            elif "Music Therapy" in extracted_text:
+                asset_program = "music_therapy"
+                break
+            elif "Music Therapy with an Undergraduate Equivalency" in extracted_text:
+                asset_program = "music_therapy_with_undergraduate_equivalency"
+                break
+            elif "Musicology" in extracted_text:
+                asset_program = "musicology"
+                break
+            elif "School of Music and Performance" in extracted_text:
+                asset_program = "school_of_music_music_performance"
+                break
+            elif "Studio Music and Jazz" in extracted_text:
+                asset_program = "studio_music_and_jazz"
+                break
+            elif "Instrumental Conducting" in extracted_text:
+                asset_program = "instrumental_conducting"
+                break
+            elif "Instrumental Jazz Performance" in extracted_text:
+                asset_program = "instrumental_jazz_performance"
+                break
+            elif "Instrumental Performance" in extracted_text:
+                asset_program = "instrumental_performance"
+                break
+            elif "Keyboard Performance" in extracted_text:
+                asset_program = "keyboard_performance"
+                break
+            elif "Keyboard Performance and Pedagogy" in extracted_text:
+                asset_program = "keyboard_performance_and_pedagogy"
+                break
+            elif "Choral Conducting" in extracted_text:
+                asset_program = "choral_conducting"
+                break
+            elif "Composition" in extracted_text:
+                asset_program = "composition"
+                break
+            elif "Jazz Composition" in extracted_text:
+                asset_program = "jazz_composition"
+                break
+            elif "Multiple Woodwinds" in extracted_text:
+                asset_program = "multiple_woodwinds"
+                break
+            elif "Vocal Jazz Performance" in extracted_text:
+                asset_program = "vocal_jazz_performance"
+                break
+            elif "Vocal Pedagogy and Performance" in extracted_text:
+                asset_program = "vocal_pedagogy_and_performance"
+                break
+            elif "Vocal Performance" in extracted_text:
+                asset_program = "vocal_performance"
+                break
+            elif "Media Scoring and Production" in extracted_text:
+                asset_program = "media_scoring_and_production"
+                break
+   
+    # Set the default value if none of the conditions match
+    if not asset_program:
+        asset_program = "music"
+                        
+
+    asset_data['ASSET_DGRPRG'] = asset_program        
+    asset_data['ASSET_AFFILIATION'] = asset_affiliation
+    asset_data['ASSET_DGRNAME'] = ASSET_DGRNAME
+    asset_data['ASSET_RESTYPE'] = determine_restype(asset_data)
+
+    # Append the ASSET data to the ASSET DataFrame
+    asset_data_df = pd.concat([pd.DataFrame([asset_data]), asset_data_df], ignore_index=True)
+
+    # Increment the group_id for the next group of rows
+    #current_group_id += 0
+
+    # Handle the creators and contributors
+    for creator in creators:
+        creator_data = {
+            'group_id': current_group_id,
+            '': 'CREATOR',
+            'CREATOR_FAMNAME': extract_famname(creator),
+            'CREATOR_GIVNAME': extract_givname(creator),
+            'CREATOR_MIDNAME': extract_midname(creator),
+        }
+        # Add other CREATOR fields here
+        creator_data_df = pd.concat([pd.DataFrame([creator_data]), creator_data_df], ignore_index=True)
+            
+    contributor_type = None  # Initialize to None or a suitable default value
+
+    for datafield in record.findall(".//datafield[@tag='700'][@ind1='1']"):
+        subfield_e = datafield.find("subfield[@code='e']")
+        if subfield_e is not None:
+            contributor_type = subfield_e.text
+            if contributor_type == "thesis advisor.":
+                contributor_type = "Advisor"
+        
+
+    for contributor in contributors:
+        contributor_data = {
+            'group_id': current_group_id,
+            '': 'CONTRIBUTOR',
+            'CONT_FAMNAME': extract_famname(contributor),
+            'CONT_GIVNAME': extract_givname(contributor),
+            'CONT_MIDNAME': extract_midname(contributor),
+            'CONT_TYPE': contributor_type,
+        }
+        # Add other CONTRIBUTOR fields here
+        contributor_data_df = pd.concat([pd.DataFrame([contributor_data]), contributor_data_df], ignore_index=True)
+        
+  
+    # Define FILE_CONTENTTYPE
+    file_content_type = 'pdf'
+
+    # Create the FILE data dictionary
+    file_data = {
+        'group_id': current_group_id,
+        '': 'FILE',
+        'FILE_DISPLAY_NAME': file_display_name,
+        'FILE_CONTENTTYPE': file_content_type,
+    }
+
+    # Append the FILE data to the FILE DataFrame
+    file_data_df = pd.concat([pd.DataFrame([file_data]), file_data_df], ignore_index=True)
+
+# Apply the custom function to create the updated ASSET_RESTYPE column
+final_data_df['ASSET_RESTYPE'] = final_data_df.apply(determine_restype, axis=1)
+     
+# Concatenate the DataFrames in the desired order
+final_data_df = pd.concat([asset_data_df, creator_data_df, contributor_data_df, file_data_df], ignore_index=True)
+
+# Define the order of columns
+column_order = all_headers
+
+# Reorder the columns in the DataFrame
+final_data_df = final_data_df[column_order]
+
+# Export the DataFrame to a CSV file
+final_data_df.to_csv('output.csv', index=False)
+
+print("Conversion completed. Data written to file.")
